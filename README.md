@@ -2,9 +2,9 @@
 
 ### Zespół:
 
-- Mateusz Wawrzyniak
-- Mateusz Ogniewski
 - Zofia Czyżewska
+- Mateusz Ogniewski
+- Mateusz Wawrzyniak
 
 ### Etapy:
 
