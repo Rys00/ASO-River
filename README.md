@@ -2,8 +2,8 @@
 
 ### Zespół:
 
-- Mateusz Ogniewski
 - Mateusz Wawrzyniak
+- Mateusz Ogniewski
 - Zofia Czyżewska
 
 ### Etapy:
