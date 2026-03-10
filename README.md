@@ -9,3 +9,5 @@
 ### Etapy:
 
 - [Etap 1](/etap1.md)
+
+![VII](./vii.png)
