@@ -2,19 +2,47 @@
 
 ## Wprowadzenie i Kontekst Projektu
 
-1.2 Kontekst Problemu
-Zwięzły opis problemu, który projekt ma rozwiązać. Dlaczego ten problem jest istotny? Jakie są obecne wyzwania związane z tym zagadnieniem?
+#### 1.2 Kontekst Problemu
 
-1.3 Cel Projektu
-Jasne zdefiniowanie, co ma zostać osiągnięte w ramach projektu. Co jest głównym rezultatem? (Po konsultacjach z prowadzącym)
+Pojazdy wodne poruszające się po rzekach napotykają liczne trudności związane z oceną otoczenia, zwłaszcza w warunkach np. dużego ruchu. Załoga musi nieustannie monitorować sytuację, identyfikować przeszkody, rozpoznawać znaki nawigacyjne i podejmować szybkie decyzje, co jest obciążające i podatne na błędy.
+
+Problem jest istotny, ponieważ błędna ocena otoczenia może prowadzić do kolizji a nawet zagrożenia życia, a także utrudnia sprawne prowadzenie jednostki. Współczesne systemy wsparcia są często ograniczone, nie zapewniają pełnej autonomii i wymagają stałej uwagi człowieka.
+
+Główne wyzwania to:
+
+- Automatyczna detekcja i klasyfikacja przeszkód na wodzie.
+- Rozpoznawanie i interpretacja znaków nawigacyjnych.
+- Segmentacja obrazu w trudnych warunkach pogodowych i oświetleniowych.
+
+#### 1.3 Cel Projektu
+
+Zaprojektowanie systemu do autonomicznej ewaluacji otoczenia pojazdu wodnego znajdującego się na rzece w celu wspomagania załogi pojazdu. W skład tejże ewaluacji będzie wchodzić analiza obrazu z kamer umieszczonych na pokładzie okrętu, a dokładniej:
+
+- Segmentacja semantyczna obrazu: Oddzielenie lustra wody od brzegu, nieba i roślinności.
+- Detekcję przeszkód: Identyfikację i lokalizację obiektów na wodzie (np. łodzie, boje, pływające konary, rośliny, inni użytkownicy).
+- Wykrywanie i klasyfikację znaków: Identyfikacja znaczenia poszczególnych znaków znajdujących się na obecnym szklaku żeglownym pojazdu.
 
 ## Możliwe Zastosowania
 
-2.1 Obszary Zastosowań
-Wymienienie sektorów lub dziedzin, w których opracowane rozwiązanie znajdzie praktyczne zastosowanie.
+#### 2.1 Obszary Zastosowań
 
-2.2 Korzyści
-Jakie są przewidywane korzyści z wdrożenia rozwiązania (np. oszczędność czasu, zwiększenie precyzji, poprawa bezpieczeństwa)?
+System może znaleźć zastosowanie w:
+
+- Żegludze śródlądowej (statki, promy, barki)
+- Jednostkach rekreacyjnych (jachty, łodzie motorowe)
+- Ratownictwie wodnym i patrolach policyjnych
+- Transportach towarowych na rzekach
+- Automatyzacji i wsparciu autonomicznych pojazdów wodnych
+
+#### 2.2 Możliwe korzyści
+
+Wdrożenie rozwiązania przyniesie:
+
+- Zwiększenie bezpieczeństwa żeglugi poprzez szybką detekcję przeszkód i zagrożeń
+- Redukcję ryzyka kolizji i wypadków
+- Oszczędność czasu i zmniejszenie obciążenia załogi
+- Zwiększenie precyzji nawigacji i interpretacji znaków
+- Możliwość pracy w trudnych warunkach pogodowych i przy ograniczonej widoczności
 
 ## Przegląd Rozwiązań (Stan Wiedzy)
 
