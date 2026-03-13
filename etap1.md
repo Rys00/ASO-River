@@ -86,8 +86,15 @@ Wstępny wybór technologii, bibliotek i języków programowania.Przykład: Pyth
 
 ## 5. Analiza dostępnych zbiorów danych
 
-5.1 Możliwe źródła danych do trenowania i testowania. Czy będą to dane syntetyczne, publiczne czy zbierane własnoręcznie?
-5.2 Analiza poszczególnych zbiorów pod względem np. liczebności przykładów, poprawności formatu oznaczeń, itp.
+#### 5.1 Możliwe źródła danych do trenowania i testowania
+
+- [link](https://purr.purdue.edu/publications/4072/1): Baza 550 zdjęć z rzeki w US wraz z oznaczonym:
+  - maską wody
+  - wielokolorową maską obiektów o różnych kategoriach
+
+- Zdjęcia z wakacji
+
+#### 5.2 Analiza poszczególnych zbiorów pod względem np. liczebności przykładów, poprawności formatu oznaczeń, itp.
 
 ## 6. Harmonogram Wstępny i Kamienie Milowe
 
