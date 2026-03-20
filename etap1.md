@@ -20,7 +20,7 @@ Zaprojektowanie systemu do autonomicznej ewaluacji otoczenia pojazdu wodnego zna
 
 - Segmentacja semantyczna obrazu: Oddzielenie lustra wody od brzegu, nieba i roślinności.
 - Detekcję przeszkód: Identyfikację i lokalizację obiektów na wodzie (np. łodzie, boje, pływające konary, rośliny, inni użytkownicy).
-- Wykrywanie i klasyfikację znaków: Identyfikacja znaczenia poszczególnych znaków znajdujących się na obecnym szklaku żeglownym pojazdu.
+- Wykrywanie znaków: Gdzie się znajdują, bez klasyfikacji
 - Nie użycie YOLO.
 
 ## 2. Możliwe Zastosowania
@@ -78,23 +78,33 @@ Powyższe ograniczenia uzasadniają potrzebę projektowania rozwiązania dedykow
 
 ## 4. Wstępna Propozycja Rozwiązania
 
-4.1 Architektura Systemu
-Ogólny schemat proponowanego rozwiązania.
+##### 4.1 Architektura Systemu
 
-4.2 Narzędzia i Technologie
-Wstępny wybór technologii, bibliotek i języków programowania.Przykład: Python, OpenCV, biblioteka PyTorch/TensorFlow (do ML), ROS (do robotyki/integracji).
+Ogólny pipeline naszego rozwiązania sprowadza się do:
+
+`Surowe zdjęcie -> Segmentacja -> Detekcja i klasyfikacja obiektów -> Gotowy wynik`
+
+Poszczególne moduły będą działać następująco:
+
+- Segmentacja: `Obraz -> Preprocessing obrazu (filtry, normalizacja, itp.) -> Sieć typu U-Net -> Gotowa maska wody`
+- Detekcja: `Obraz po segmentacji -> Architektura Fast/Faster R-CNN (posiadająca metody SS/RPN, FCN, RolPool, MLP oraz BoxRegressor) -> Gotowe bounding box-y obiektów wraz z ich etykietami`
+
+##### 4.2 Narzędzia i Technologie
+
+- Python
+- PyTorch
+- OpenCV
+- Numpy
+- Weights&Biases
+- Matplotlib
 
 ## 5. Analiza dostępnych zbiorów danych
 
-#### 5.1 Możliwe źródła danych do trenowania i testowania
+- [link](https://purr.purdue.edu/publications/4072/1): Baza 550 zdjęć z maskami i etykietami dla różnych obiektów na wodzie
 
-- [link](https://purr.purdue.edu/publications/4072/1): Baza 550 zdjęć z rzeki w US wraz z oznaczonym:
-  - maską wody
-  - wielokolorową maską obiektów o różnych kategoriach
+- [link](https://lojzezust.github.io/lars-dataset/#download): LaRS, Baza 4000+ zdjęć z maskami i etykietami dla różnych obiektów na wodzie
 
-- Zdjęcia z wakacji
-
-#### 5.2 Analiza poszczególnych zbiorów pod względem np. liczebności przykładów, poprawności formatu oznaczeń, itp.
+- [link](https://datasetninja.com/water-segmentation): Baza ~4500 zdjęć z maską wody
 
 ## 6. Harmonogram Wstępny i Kamienie Milowe
 
