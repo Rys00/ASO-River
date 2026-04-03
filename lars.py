@@ -2,6 +2,7 @@ import cv2
 import os
 from typing import Literal
 import numpy as np
+import torch
 
 dir = os.path.join(os.getcwd(), "data", "lars_v1.0.0")
 data_paths = {}
@@ -51,7 +52,7 @@ def bar(i: int, n: int, size: int = 40, prc: bool = True) -> str:
 
 def load_split(
     split: Literal["train", "val", "test"], limit: int = None, inc_semantic: bool = True, inc_panoptic: bool = False, reshape: tuple[int, int] = (1920, 1080), save=True
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     Load a split of the LARS dataset.
 
@@ -60,10 +61,15 @@ def load_split(
         limit: Maximum number of samples to load (default: None, which loads all).
         inc_semantic: Whether to include semantic masks (default: True).
         inc_panoptic: Whether to include panoptic masks (default: False).
+        reshape: Tuple of (width, height) to resize images and masks to (default: (1920, 1080)).
 
     Returns:
-        A tuple of (images, semantic_masks, panoptic_masks), where each is a numpy array.
+        A tuple containing:
+        - images: A tensor of shape (N, C, H, W) containing the loaded images.
+        - semantic: A tensor of shape (N, H, W) containing the semantic masks (or None if inc_semantic is False).
+        - panoptic: A tensor of shape (N, H, W, C) containing the panoptic masks (or None if inc_panoptic is False).
     """
+    reshape = (int(reshape[0]), int(reshape[1]))
     cached_dir = os.path.join(dir, "cached")
     os.makedirs(cached_dir, exist_ok=True)
     cached_img = os.path.join(cached_dir, f"{split}_images.npy")
@@ -78,15 +84,15 @@ def load_split(
     images = []
     if is_cached_img:
         print(f"Loading cached images from {cached_img}")
-        images = np.load(cached_img)
+        images = torch.from_numpy(np.load(cached_img))
     semantic = [] if inc_semantic else None
     if inc_semantic and is_cached_semantic:
         print(f"Loading cached semantic masks from {cached_semantic}")
-        semantic = np.load(cached_semantic)
+        semantic = torch.from_numpy(np.load(cached_semantic))
     panoptic = [] if inc_panoptic else None
     if inc_panoptic and is_cached_panoptic:
         print(f"Loading cached panoptic masks from {cached_panoptic}")
-        panoptic = np.load(cached_panoptic)
+        panoptic = torch.from_numpy(np.load(cached_panoptic))
     if not (not is_cached_img or (inc_semantic and not is_cached_semantic) or (inc_panoptic and not is_cached_panoptic)):
         print(f"All data for {split} split is cached. Skipping loading from disk.")
         return images, semantic, panoptic
@@ -108,34 +114,75 @@ def load_split(
     print()
     end = int(inc_semantic and not is_cached_semantic) + int(inc_panoptic and not is_cached_panoptic) + int(not is_cached_img)
     i = 0
-    print(f"Converting samples to numpy arrays {bar(i, end)}", end="\r")
+    print(f"Converting samples to tensors {bar(i, end)}", end="\r")
     if not is_cached_img:
-        images = np.array(images)
+        images = np.array(images)  # Numpy array of shape (N, H, W, C)
+        images = images.transpose(0, 3, 1, 2)  # Convert to shape (N, C, H, W)
+        images = torch.from_numpy(images)  # Convert to PyTorch tensor
         i += 1
-        print(f"Converting samples to numpy arrays {bar(i, end)}", end="\r")
+        print(f"Converting samples to tensors {bar(i, end)}", end="\r")
     if inc_semantic and not is_cached_semantic:
         semantic = np.array(semantic)
+        semantic = torch.from_numpy(semantic)  # Convert to PyTorch tensor
         i += 1
-        print(f"Converting samples to numpy arrays {bar(i, end)}", end="\r")
+        print(f"Converting samples to tensors {bar(i, end)}", end="\r")
     if inc_panoptic and not is_cached_panoptic:
         panoptic = np.array(panoptic)
+        panoptic = torch.from_numpy(panoptic)  # Convert to PyTorch tensor
         i += 1
-        print(f"Converting samples to numpy arrays {bar(i, end)}", end="\r")
+        print(f"Converting samples to tensors {bar(i, end)}", end="\r")
     print()
     if save:
         i = 0
-        print(f"Saving numpy arrays to disk {bar(i, end)}", end="\r")
-        np.save(cached_img, images)
+        print(f"Saving tensors to disk {bar(i, end)}", end="\r")
+        np.save(cached_img, images.detach().cpu().numpy())
         i += 1
-        print(f"Saving numpy arrays to disk {bar(i, end)}", end="\r")
+        print(f"Saving tensors to disk {bar(i, end)}", end="\r")
         if inc_semantic:
-            np.save(cached_semantic, semantic)
+            np.save(cached_semantic, semantic.detach().cpu().numpy())
             i += 1
-            print(f"Saving numpy arrays to disk {bar(i, end)}", end="\r")
+            print(f"Saving tensors to disk {bar(i, end)}", end="\r")
         if inc_panoptic:
-            np.save(cached_panoptic, panoptic)
+            np.save(cached_panoptic, panoptic.detach().cpu().numpy())
             i += 1
-            print(f"Saving numpy arrays to disk {bar(i, end)}", end="\r")
+            print(f"Saving tensors to disk {bar(i, end)}", end="\r")
     print(f"\nSuccessfully loaded {len(images)} samples from {split} split.")
 
     return images, semantic, panoptic
+
+
+def show_img(img: torch.Tensor, semantic: torch.Tensor, window_name: str = "Image", highlight_water: tuple[int, int, int] | None = (41, 167, 224)):
+    """
+    Show an image with its semantic mask overlaid.
+
+    Args:
+        img: A tensor of shape (C, H, W) containing the image to show.
+        semantic: A tensor of shape (H, W) containing the semantic mask for the image.
+        window_name: The name of the window to show the image in (default: "Image").
+        highlight_water: The color to highlight water areas in RGB format (default: (41, 167, 224)). If None, water areas will not be highlighted.
+    """
+    img = img.permute(1, 2, 0).numpy().astype(np.uint8)
+    if highlight_water is not None:
+        water_id = [k for k, v in SEMANTIC.items() if v == "Water"][0]
+        water = semantic == water_id
+        overlay = np.zeros_like(img, dtype=np.uint8)
+        overlay[water] = highlight_water[::-1]  # Convert RGB to BGR for OpenCV
+        img = cv2.addWeighted(img, 1.0, overlay, 0.75, 0)
+    cv2.imshow(window_name, img)
+
+
+def cycle_images(images: torch.Tensor, semantic: torch.Tensor, window_name: str = "Image", fps: int = 30, highlight_water: tuple[int, int, int] | None = (41, 167, 224)):
+    """
+    Cycle through a list of images, showing each one for a short period of time.
+
+    Args:
+        images: A tensor of shape (N, C, H, W) containing the images to show.
+        semantic: A tensor of shape (N, H, W) containing the semantic masks for the images.
+        window_name: The name of the window to show the images in (default: "Image").
+        fps: The frames per second to cycle through the images at (default: 30).
+        highlight_water: The color to highlight water areas in RGB format (default: (41, 167, 224)). If None, water areas will not be highlighted.
+    """
+    for i in range(len(images)):
+        show_img(images[i], semantic[i], window_name, highlight_water)
+        cv2.waitKey(int(1000 / fps))
+    cv2.destroyAllWindows()
