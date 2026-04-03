@@ -11,11 +11,8 @@ def main():
     fps = 30
     for i in range(len(images)):
         img = images[i]
-        # find where semantic mask is water
-        # find water id
         water_id = [k for k, v in SEMANTIC.items() if v == "Water"][0]
         water = semantic[i] == water_id
-        # blue transparent overlay for water
         overlay = np.zeros_like(img, dtype=np.uint8)
         overlay[water] = [255, 0, 0]
         img = cv2.addWeighted(img, 1.0, overlay, 0.5, 0)
