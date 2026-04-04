@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 from torch.nn import functional as F
+import math
 
 
 class DoubleConv(nn.Module):
@@ -71,7 +72,41 @@ class UNet(nn.Module):
         left = (w - target_w) // 2
         return x[:, :, top : top + target_h, left : left + target_w]
 
+    @staticmethod
+    def _pad_to_multiple(x: torch.Tensor, multiple: int) -> tuple[torch.Tensor, tuple[int, int, int, int]]:
+        """
+        Pad NCHW tensor so H and W are divisible by `multiple`.
+
+        Returns the padded tensor and the padding tuple (pad_left, pad_right, pad_top, pad_bottom)
+        suitable for slicing the padding away later.
+        """
+        if multiple <= 1:
+            return x, (0, 0, 0, 0)
+
+        _, _, h, w = x.shape
+        target_h = int(math.ceil(h / multiple) * multiple)
+        target_w = int(math.ceil(w / multiple) * multiple)
+
+        pad_h = target_h - h
+        pad_w = target_w - w
+
+        pad_top = pad_h // 2
+        pad_bottom = pad_h - pad_top
+        pad_left = pad_w // 2
+        pad_right = pad_w - pad_left
+
+        if pad_h == 0 and pad_w == 0:
+            return x, (0, 0, 0, 0)
+
+        x = F.pad(x, (pad_left, pad_right, pad_top, pad_bottom))
+        return x, (pad_left, pad_right, pad_top, pad_bottom)
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        orig_h, orig_w = x.shape[2], x.shape[3]
+        # Ensure dimensions survive down/up-sampling without spatial drift.
+        # With `len(self.downs)` pooling stages, we need H and W divisible by 2**depth.
+        x, (pad_left, pad_right, pad_top, pad_bottom) = self._pad_to_multiple(x, multiple=2 ** len(self.downs))
+
         skip_connections: list[torch.Tensor] = []
 
         for down in self.downs:
@@ -93,4 +128,8 @@ class UNet(nn.Module):
             x = torch.cat((skip, x), dim=1)
             x = self.ups[i + 1](x)
 
-        return self.final_conv(x)
+        out = self.final_conv(x)
+        # Remove padding so output matches the original input spatial size.
+        if pad_left or pad_right or pad_top or pad_bottom:
+            out = out[:, :, pad_top : pad_top + orig_h, pad_left : pad_left + orig_w]
+        return out
