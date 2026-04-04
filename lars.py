@@ -116,7 +116,7 @@ def load_split(
     i = 0
     print(f"Converting samples to tensors {bar(i, end)}", end="\r")
     if not is_cached_img:
-        images = np.array(images)  # Numpy array of shape (N, H, W, C)
+        images = np.array(images).astype(np.float32) / 255.0  # Numpy array of shape (N, H, W, C)
         images = images.transpose(0, 3, 1, 2)  # Convert to shape (N, C, H, W)
         images = torch.from_numpy(images)  # Convert to PyTorch tensor
         i += 1
@@ -161,7 +161,7 @@ def show_img(img: torch.Tensor, semantic: torch.Tensor, window_name: str = "Imag
         window_name: The name of the window to show the image in (default: "Image").
         highlight_water: The color to highlight water areas in RGB format (default: (41, 167, 224)). If None, water areas will not be highlighted.
     """
-    img = img.permute(1, 2, 0).numpy().astype(np.uint8)
+    img = (img.permute(1, 2, 0).numpy() * 255.0).astype(np.uint8)
     if highlight_water is not None:
         water_id = [k for k, v in SEMANTIC.items() if v == "Water"][0]
         water = semantic == water_id
