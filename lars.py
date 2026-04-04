@@ -51,7 +51,7 @@ def bar(i: int, n: int, size: int = 40, prc: bool = True) -> str:
 
 
 def load_split(
-    split: Literal["train", "val", "test"], limit: int = None, inc_semantic: bool = True, inc_panoptic: bool = False, reshape: tuple[int, int] = (1920, 1080), save=True
+    split: Literal["train", "val", "test"], limit: int = None, inc_semantic: bool = True, inc_panoptic: bool = False, reshape: tuple[int, int] = (1024, 576), save=True
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     Load a split of the LARS dataset.
@@ -61,7 +61,7 @@ def load_split(
         limit: Maximum number of samples to load (default: None, which loads all).
         inc_semantic: Whether to include semantic masks (default: True).
         inc_panoptic: Whether to include panoptic masks (default: False).
-        reshape: Tuple of (width, height) to resize images and masks to (default: (1920, 1080)).
+        reshape: Tuple of (width, height) to resize images and masks to (default: (1024, 576)).
 
     Returns:
         A tuple containing:
