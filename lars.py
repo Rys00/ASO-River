@@ -151,7 +151,7 @@ def load_split(
     return images, semantic, panoptic
 
 
-def show_img(img: torch.Tensor, semantic: torch.Tensor, window_name: str = "Image", highlight_water: tuple[int, int, int] | None = (41, 167, 224)):
+def show_img(img: torch.Tensor, semantic: torch.Tensor, window_name: str = "Image", highlight_water: tuple[int, int, int] | None = (41, 167, 224), wrong: torch.Tensor | None = None):
     """
     Show an image with its semantic mask overlaid.
 
@@ -167,6 +167,10 @@ def show_img(img: torch.Tensor, semantic: torch.Tensor, window_name: str = "Imag
         water = semantic == water_id
         overlay = np.zeros_like(img, dtype=np.uint8)
         overlay[water] = highlight_water[::-1]  # Convert RGB to BGR for OpenCV
+        img = cv2.addWeighted(img, 1.0, overlay, 0.75, 0)
+    if wrong is not None:
+        overlay = np.zeros_like(img, dtype=np.uint8)
+        overlay[wrong] = (0, 0, 255)  # Red color for wrong predictions
         img = cv2.addWeighted(img, 1.0, overlay, 0.75, 0)
     cv2.imshow(window_name, img)
 
