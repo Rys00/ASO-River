@@ -5,8 +5,10 @@ import math
 
 
 class DoubleConv(nn.Module):
-    def __init__(self, in_channels: int, out_channels: int):
+    def __init__(self, in_channels: int, out_channels: int, dropout_p: float = 0.0):
         super().__init__()
+        if not (0.0 <= dropout_p < 1.0):
+            raise ValueError(f"dropout_p must be in [0.0, 1.0), got {dropout_p}")
         self.net = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=False),
             nn.BatchNorm2d(out_channels),
@@ -15,9 +17,11 @@ class DoubleConv(nn.Module):
             nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True),
         )
+        self.dropout = nn.Identity() if dropout_p == 0.0 else nn.Dropout2d(p=dropout_p)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.net(x)
+        x = self.net(x)
+        return self.dropout(x)
 
 
 class UNet(nn.Module):
@@ -25,9 +29,19 @@ class UNet(nn.Module):
         self,
         in_channels: int = 3,
         out_channels: int = 1,
-        features: tuple[int, ...] = (64, 128, 256, 512),
+        features: tuple[int, ...] = (32, 64, 128, 256),
+        dropout_p: float = 0.1,
+        dropout_min_features: int = 256,
+        dropout_bottleneck_p: float | None = 0.2,
     ):
         super().__init__()
+
+        if not (0.0 <= dropout_p < 1.0):
+            raise ValueError(f"dropout_p must be in [0.0, 1.0), got {dropout_p}")
+        if dropout_bottleneck_p is not None and not (0.0 <= dropout_bottleneck_p < 1.0):
+            raise ValueError(f"dropout_bottleneck_p must be in [0.0, 1.0), got {dropout_bottleneck_p}")
+        if dropout_min_features < 0:
+            raise ValueError(f"dropout_min_features must be >= 0, got {dropout_min_features}")
 
         self.downs = nn.ModuleList()
         self.ups = nn.ModuleList()
@@ -36,15 +50,21 @@ class UNet(nn.Module):
 
         current_in = in_channels
         for feature in features:
-            self.downs.append(DoubleConv(current_in, feature))
+            p = dropout_p if feature >= dropout_min_features else 0.0
+            self.downs.append(DoubleConv(current_in, feature, dropout_p=p))
             current_in = feature
 
-        self.bottleneck = DoubleConv(features[-1], features[-1] * 2)
+        self.bottleneck = DoubleConv(
+            features[-1],
+            features[-1] * 2,
+            dropout_p=dropout_p if dropout_bottleneck_p is None else dropout_bottleneck_p,
+        )
 
         current_in = features[-1] * 2
         for feature in reversed(features):
             self.ups.append(nn.ConvTranspose2d(current_in, feature, kernel_size=2, stride=2))
-            self.ups.append(DoubleConv(feature * 2, feature))
+            p = dropout_p if feature >= dropout_min_features else 0.0
+            self.ups.append(DoubleConv(feature * 2, feature, dropout_p=p))
             current_in = feature
 
         self.final_conv = nn.Conv2d(features[0], out_channels, kernel_size=1)
