@@ -34,14 +34,14 @@ SEMANTIC: dict[int, str] = {
 }
 
 
-def bar(i: int, n: int, size: int = 40, prc: bool = True) -> str:
+def bar(i: int, n: int, size: int = 41, prc: bool = True) -> str:
     if n == 0:
         n = 1
         i = 1
     if i > n:
         i = n
     chars = "-▏▎▍▌▋▊▉█"
-    bar = f"▕{chars[-1] * int(i/n*size):40}▎".replace(" ", chars[0])
+    bar = f"▕{chars[-1] * int(i/n*size):41}▎".replace(" ", chars[0])
     partial = chars[int(i / n * size % 1 * (len(chars) - 1))]
     bar = bar.replace(f"▕{chars[0]}", f"▕{partial}")
     bar = bar.replace(f"{chars[-1]}{chars[0]}", f"{chars[-1]}{partial}")

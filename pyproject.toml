@@ -5,12 +5,15 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    "dotenv>=0.9.9",
     "matplotlib>=3.10.8",
     "numpy>=2.4.4",
     "opencv-python>=4.13.0.92",
     "torch>=2.11.0",
     "torchaudio>=2.11.0",
+    "torchmetrics>=1.9.0",
     "torchvision>=0.26.0",
+    "wandb>=0.17.0",
 ]
 
 [[tool.uv.index]]

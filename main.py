@@ -3,6 +3,9 @@ from unet import UNet
 import torch
 from segmentation import prepare_dataloaders, train
 import cv2
+import os
+import wandb
+from dotenv import load_dotenv
 
 
 def show_sample_images():
@@ -12,17 +15,36 @@ def show_sample_images():
     cycle_images(x, y, fps=30)
 
 
+features = (8, 16, 16, 32, 64, 128)
+model_name = "model6.pth"
+
+
 def train_unet():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     num_channels = 3  # BGR images
     num_classes = 3  # Obstacles, Water, Sky (255 is ignored via ignore_index)
-    dataloaders = prepare_dataloaders(batch_size=4)
-    model = UNet(in_channels=num_channels, out_channels=num_classes).to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+    dataloaders = prepare_dataloaders(batch_size=8)
+    model = UNet(in_channels=num_channels, out_channels=num_classes, features=features).to(device)
+    # Good, standard defaults for semantic segmentation.
+    optimizer = torch.optim.AdamW(model.parameters(), lr=2e-4, weight_decay=1e-4)
     criterion = torch.nn.CrossEntropyLoss(ignore_index=255)
-    train(model, dataloaders, optimizer, criterion, device)
+    epochs = 20
+    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs, eta_min=1e-6)
+    train(
+        wandb_project="ASO-Segmentation",
+        wandb_run_name=f"{features}-features-unet",
+        model=model,
+        dataloaders=dataloaders,
+        optimizer=optimizer,
+        criterion=criterion,
+        device=device,
+        lr_scheduler=lr_scheduler,
+        epochs=epochs,
+        num_classes=num_classes,
+        ignore_index=255,
+    )
     # save the model
-    torch.save(model.state_dict(), "unet_model.pth")
+    torch.save(model.state_dict(), "final_model.pth")
 
 
 def show_predictions():
@@ -31,8 +53,8 @@ def show_predictions():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     num_channels = 3  # BGR images
     num_classes = 3  # Obstacles, Water, Sky (255 is ignored via ignore_index)
-    model = UNet(in_channels=num_channels, out_channels=num_classes).to(device)
-    model.load_state_dict(torch.load("unet_model.pth", map_location=device))
+    model = UNet(in_channels=num_channels, out_channels=num_classes, features=features).to(device)
+    model.load_state_dict(torch.load(model_name, map_location=device))
     model.eval()
     fps = 2
     for i in range(len(x)):
@@ -46,6 +68,8 @@ def show_predictions():
 
 
 def main():
+    load_dotenv(dotenv_path=".env", override=False)
+    wandb.login(key=os.getenv("WANDB_API_KEY"), relogin=True)
     # show_sample_images()
     train_unet()
     # evaluate()
