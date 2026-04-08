@@ -2,10 +2,12 @@ from torch.utils.data import TensorDataset, DataLoader
 from lars import load_split, bar
 from torch import nn, optim
 import torch
+import torchmetrics
+import wandb
 
 
-def prepare_dataloaders(batch_size: int = 4, shuffle: bool = True, drop_last: bool = True) -> DataLoader:
-    dataloaders = {}
+def prepare_dataloaders(batch_size: int = 4, shuffle: bool = True, drop_last: bool = True) -> dict[str, DataLoader]:
+    dataloaders: dict[str, DataLoader] = {}
     for split in ["train", "val"]:
         print(f"Loading {split} data...")
         images, masks, _ = load_split(split)
@@ -13,74 +15,112 @@ def prepare_dataloaders(batch_size: int = 4, shuffle: bool = True, drop_last: bo
         masks = masks.long()
         print(f"Preparing dataloader for {split} split...")
         dataset = TensorDataset(images, masks)
-        loader = DataLoader(
+        dataloaders[split] = DataLoader(
             dataset,
             batch_size=batch_size,
             shuffle=shuffle,
             drop_last=drop_last,
             num_workers=2,
             pin_memory=True,
-        )  # pick what fits your GPU  # often useful for stable batch sizes
-        dataloaders[split] = loader
+        )
     return dataloaders
 
 
 def train(
+    wandb_project: str,
+    wandb_run_name: str,
     model: nn.Module,
     dataloaders: dict[str, DataLoader],
     optimizer: optim.Optimizer,
     criterion: nn.Module,
     device: torch.device,
+    lr_scheduler: optim.lr_scheduler._LRScheduler | None,
     epochs: int = 10,
-    use_amp: bool = True,
-    grad_accum_steps: int = 1,
+    num_classes: int = 3,
+    ignore_index: int | None = 255,
 ):
-    model.train()
-    print("Starting training...")
-    amp_enabled = bool(use_amp and device.type == "cuda")
-    scaler = torch.amp.GradScaler("cuda", enabled=amp_enabled)
+    def get_lr() -> float | None:
+        if lr_scheduler is not None and hasattr(lr_scheduler, "get_last_lr"):
+            lr_list = lr_scheduler.get_last_lr()
+            return float(lr_list[0]) if lr_list else None
+        return optimizer.param_groups[0].get("lr", None)
 
-    def autocast_ctx():
-        return torch.autocast(device_type="cuda", dtype=torch.float16, enabled=amp_enabled)
+    wandb.init(
+        project=wandb_project,
+        name=wandb_run_name,
+        config={
+            "epochs": epochs,
+            "device": device.type,
+            "optimizer": optimizer.__class__.__name__,
+            "lr": get_lr(),
+            "wd": optimizer.param_groups[0].get("weight_decay", 0.0),
+            "criterion": criterion.__class__.__name__,
+        },
+    )
 
-    for epoch in range(epochs):
-        model.train()
-        optimizer.zero_grad(set_to_none=True)
-        running_loss = 0.0
-        for step, (images, masks) in enumerate(dataloaders["train"]):
-            print(f"Epoch [{epoch+1}/{epochs}]: {'train':>10} {bar(step, len(dataloaders['train']))}", end="\r")
-            images = images.to(device, non_blocking=True)
-            masks = masks.to(device, non_blocking=True)
+    metric_loss = torchmetrics.aggregation.MeanMetric().to(device)
+    if ignore_index is None:
+        metric_acc = torchmetrics.classification.Accuracy(task="multiclass", num_classes=num_classes).to(device)
+    else:
+        metric_acc = torchmetrics.classification.Accuracy(task="multiclass", num_classes=num_classes, ignore_index=ignore_index).to(device)
 
-            with autocast_ctx():
-                outputs = model(images)
-                loss = criterion(outputs, masks)
-                loss = loss / max(1, grad_accum_steps)
+    best_acc: float | None = None
 
-            scaler.scale(loss).backward()
-            running_loss += loss.item() * max(1, grad_accum_steps)
+    try:
+        for epoch in range(1, epochs + 1):
+            for phase in ("train", "val"):
+                is_train = phase == "train"
+                model.train() if is_train else model.eval()
 
-            if (step + 1) % max(1, grad_accum_steps) == 0:
-                scaler.step(optimizer)
-                scaler.update()
-                optimizer.zero_grad(set_to_none=True)
+                loader = dataloaders[phase]
+                steps = max(1, len(loader))
+                metric_loss.reset()
+                metric_acc.reset()
 
-        if grad_accum_steps > 1 and (len(dataloaders["train"]) % grad_accum_steps) != 0:
-            scaler.step(optimizer)
-            scaler.update()
-            optimizer.zero_grad(set_to_none=True)
+                for step, (images, masks) in enumerate(loader):
+                    # blue terminal color for training, cyan for validation
+                    color_code = "\033[94m" if is_train else "\033[96m"
+                    print(f"{color_code}(Epoch {epoch:02}/{epochs} [{phase:5}]){bar(step + 1, steps)}\033[0m", end="\r")
+                    images = images.to(device, non_blocking=True)
+                    masks = masks.to(device, non_blocking=True)
 
-        avg_train_loss = running_loss / max(1, len(dataloaders["train"]) / grad_accum_steps)
-        model.eval()
-        avg_val_loss = 0.0
-        for step, (images, masks) in enumerate(dataloaders["val"]):
-            print(f"Epoch [{epoch+1}/{epochs}]: {'val':>10} {bar(step, len(dataloaders['val']))}", end="\r")
-            images = images.to(device, non_blocking=True)
-            masks = masks.to(device, non_blocking=True)
-            with torch.no_grad(), autocast_ctx():
-                outputs = model(images)
-                loss = criterion(outputs, masks)
-                avg_val_loss += loss.item() * images.size(0)
+                    if is_train:
+                        optimizer.zero_grad(set_to_none=True)
 
-        avg_val_loss = avg_val_loss / len(dataloaders["val"].dataset)
-        print(f"Epoch [{epoch+1}/{epochs}], Train loss: {avg_train_loss:.4f} Val loss: {avg_val_loss:.4f}                             ")
+                    with torch.set_grad_enabled(is_train):
+                        logits = model(images)
+                        preds = logits.argmax(dim=1)
+                        loss = criterion(logits, masks)
+
+                        metric_loss.update(loss)
+                        metric_acc.update(preds, masks)
+
+                        if is_train:
+                            loss.backward()
+                            optimizer.step()
+
+                mean_loss = float(metric_loss.compute().detach().cpu())
+                acc = float(metric_acc.compute().detach().cpu())
+                current_lr = get_lr()
+
+                wandb.log(
+                    {
+                        f"{phase}/loss": mean_loss,
+                        f"{phase}/accuracy": acc,
+                        f"{phase}/lr": current_lr,
+                    },
+                    step=epoch,
+                )
+
+                extra = ""
+                if phase == "val" and (best_acc is None or acc > best_acc):
+                    extra = " (best so far, saving model...)"
+                    best_acc = acc
+                print(f"{color_code}(Epoch {epoch:02}/{epochs} [{phase:5}]) Loss: {mean_loss:.3f} Accuracy: {acc:.3f} lr: {current_lr*10000:.4f}e-4{extra}\033[0m                           ")
+                if extra:
+                    torch.save(model.state_dict(), "best_model.pth")
+
+            if lr_scheduler is not None:
+                lr_scheduler.step()
+    finally:
+        wandb.finish()
