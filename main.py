@@ -15,8 +15,8 @@ def show_sample_images():
     cycle_images(x, y, fps=30)
 
 
-features = (8, 16, 16, 32, 64, 128)
-model_name = "model6.pth"
+features = (16, 32, 16, 32, 64, 128)
+model_name = f"model{str(features).replace(' ', '')}-wl-aug.pth"
 
 
 def train_unet():
@@ -24,15 +24,25 @@ def train_unet():
     num_channels = 3  # BGR images
     num_classes = 3  # Obstacles, Water, Sky (255 is ignored via ignore_index)
     dataloaders = prepare_dataloaders(batch_size=8)
-    model = UNet(in_channels=num_channels, out_channels=num_classes, features=features).to(device)
+    model = UNet(in_channels=num_channels, out_channels=num_classes, features=features, dropout_p=0.1, dropout_min_features=32, dropout_bottleneck_p=0.2).to(device)
     # Good, standard defaults for semantic segmentation.
     optimizer = torch.optim.AdamW(model.parameters(), lr=2e-4, weight_decay=1e-4)
-    criterion = torch.nn.CrossEntropyLoss(ignore_index=255)
+
+    # Class-balanced loss weighting (helps when obstacles are rare).
+    train_masks = dataloaders["train"].dataset.tensors[1]
+    valid = train_masks != 255
+    class_counts = torch.bincount(train_masks[valid].reshape(-1), minlength=num_classes).float()
+    class_weights = class_counts.sum() / (num_classes * class_counts.clamp_min(1.0))
+    class_weights = class_weights / class_weights.mean().clamp_min(1e-8)
+    class_weights = class_weights.clamp(0.1, 10.0)
+    print(f"Class counts: {class_counts.tolist()} | CE weights: {class_weights.tolist()}")
+
+    criterion = torch.nn.CrossEntropyLoss(ignore_index=255, weight=None)  # class_weights.to(device))
     epochs = 20
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs, eta_min=1e-6)
     train(
         wandb_project="ASO-Segmentation",
-        wandb_run_name=f"{features}-features-unet",
+        wandb_run_name=f"{features}-features-unet-augmented",
         model=model,
         dataloaders=dataloaders,
         optimizer=optimizer,
