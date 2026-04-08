@@ -35,6 +35,9 @@ class UNet(nn.Module):
         dropout_bottleneck_p: float | None = 0.2,
     ):
         super().__init__()
+        self.dropout_p = dropout_p
+        self.dropout_min_features = dropout_min_features
+        self.dropout_bottleneck_p = dropout_bottleneck_p
 
         if not (0.0 <= dropout_p < 1.0):
             raise ValueError(f"dropout_p must be in [0.0, 1.0), got {dropout_p}")
