@@ -16,17 +16,20 @@ v_bilateral = None
 div = 1
 shape = (1024 // div, 576 // div)
 
+# features = (32, 32, 64, 64, 128, 256)
 features = (16, 16, 32, 32, 64, 128)
 
 augment_train = True
 weighted_loss = True
-batch_size = 16
+batch_size = 8
 
-seed = 45
+seed = 48
 torch.manual_seed(seed)
+preload_from = None
+preload_from = "best.pth"
 random_chars = "".join([chr(c) for c in torch.randint(ord("A"), ord("Z") + 1, (5,), dtype=torch.uint8).cpu().numpy().tolist()])
 model_name = f"model{str(features).replace(' ', '')}{'-aug' if augment_train else ''}{'-hsv(' + str(h_bilateral) + ';' + str(s_bilateral) + ';' + str(v_bilateral) + ')' if hsv else ''}{'-wl' if weighted_loss else ''}.pth"
-
+model_name = "best.pth"  # Override for showing predictions from a specific model.
 
 def show_sample_images():
     x, y, _ = load_split("train", hsv=hsv, reshape=shape, h_bilateral=h_bilateral, s_bilateral=s_bilateral, v_bilateral=v_bilateral)
@@ -62,8 +65,12 @@ def train_unet():
 
     dataloaders = prepare_dataloaders(batch_size=batch_size, reshape=shape, hsv=hsv, h_bilateral=h_bilateral, s_bilateral=s_bilateral, v_bilateral=v_bilateral)
     model = UNet(in_channels=num_channels, out_channels=num_classes, features=features, dropout_p=0.1, dropout_min_features=64, dropout_bottleneck_p=0.2).to(device)
+    lr = 3e-4
+    if preload_from:
+        model.load_state_dict(torch.load(preload_from, map_location=device))
+        lr = 1e-5  # Lower LR for fine-tuning from a pretrained model.
     # Good, standard defaults for semantic segmentation.
-    optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4, weight_decay=1e-4)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
 
     # Class-balanced loss weighting (helps when obstacles are rare).
     train_masks = dataloaders["train"].dataset.tensors[1]
@@ -101,13 +108,14 @@ def train_unet():
 
 
 def show_predictions():
-    x, y, _ = load_split("train", hsv=hsv)
+    x, y, _ = load_split("val", hsv=hsv)
     print(f"Images shape: {x.shape}")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     num_channels = 3  # BGR images
     num_classes = 3  # Obstacles, Water, Sky (255 is ignored via ignore_index)
     model = UNet(in_channels=num_channels, out_channels=num_classes, features=features).to(device)
-    filename = model_name.replace(".pth", f"{'.' + random_chars if random_chars else ''}.best.pth")
+    # filename = model_name.replace(".pth", f"{'.' + random_chars if random_chars else ''}.best.pth")
+    filename = model_name
     model.load_state_dict(torch.load(filename, map_location=device))
     model.eval()
     fps = 2
