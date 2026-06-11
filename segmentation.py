@@ -4,7 +4,6 @@ from torch import nn, optim
 import torch
 import torchmetrics
 import wandb
-import kornia.augmentation as K
 
 
 class KorniaSegmentationAugment(nn.Module):
@@ -22,6 +21,11 @@ class KorniaSegmentationAugment(nn.Module):
         input_is_hsv: bool = False,
     ):
         super().__init__()
+        # Lazy import: kornia loads the compiled kornia_rs extension, which can
+        # crash (SIGILL) on CPUs without AVX2. Augmentation is only used during
+        # CUDA training, so only pay that cost when this class is instantiated.
+        import kornia.augmentation as K
+
         self.input_is_bgr = bool(input_is_bgr)
         self.input_is_hsv = bool(input_is_hsv)
         if self.input_is_hsv and self.input_is_bgr:
