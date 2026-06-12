@@ -1,9 +1,9 @@
 import os
 import sys
+import argparse
 from pathlib import Path
 
 # Fix for Qt and Wayland on Linux systems.
-# opencv-python's bundled Qt doesn't support Wayland natively.
 os.environ["QT_QPA_PLATFORM"] = "xcb"
 import cv2
 import numpy as np
@@ -154,6 +154,16 @@ def optimize_hyperparameters():
 
 
 if __name__ == "__main__":
-    # mean_iou()
-    show_predictions()
-    # optimize_hyperparameters()
+    parser = argparse.ArgumentParser(description="Mean-Shift Water Segmentation")
+    parser.add_argument("--mode", choices=["show", "mean_iou", "optimize"], default="show", help="Operation mode")
+    parser.add_argument("--sp", type=int, default=32, help="Spatial window radius for Mean-Shift")
+    parser.add_argument("--sr", type=int, default=128, help="Color window radius for Mean-Shift")
+    parser.add_argument("--dim", type=int, default=256, help="Processing dimension")
+    args = parser.parse_args()
+
+    if args.mode == "show":
+        show_predictions()
+    elif args.mode == "mean_iou":
+        mean_iou(process_dim=args.dim, sp=args.sp, sr=args.sr)
+    elif args.mode == "optimize":
+        optimize_hyperparameters()
