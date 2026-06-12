@@ -4,9 +4,17 @@ import torch
 import cv2
 import wandb
 from dotenv import load_dotenv
+import sys
+from pathlib import Path
+
+# Add project root to sys.path to allow absolute imports from scripts in subfolders
+project_root = str(Path(__file__).resolve().parent.parent)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 from lars import load_split, cycle_images, show_img
-from unet import UNet
-from segmentation import KorniaSegmentationAugment, prepare_dataloaders, train
+from segmentation.unet import UNet
+from segmentation.unet_segmentation import KorniaSegmentationAugment, prepare_dataloaders, train
 import numpy as np
 
 # Fix for Qt and Wayland on Linux systems.
@@ -16,6 +24,7 @@ os.environ["QT_QPA_PLATFORM"] = "xcb"
 def detect_features(model_path):
     """Detects UNet feature configuration from a saved state_dict."""
     if not os.path.exists(model_path):
+        print(f"Model path {model_path} does not exist. Cannot detect features or load model.")
         return None
     state_dict = torch.load(model_path, map_location="cpu")
     features = []
@@ -55,7 +64,7 @@ def load_model(model_path, device, num_channels, num_classes, default_features, 
 def get_args():
     parser = argparse.ArgumentParser(description="ASO River Segmentation")
     parser.add_argument("--mode", choices=["train", "show", "sample", "mean_iou"], default="show", help="Operation mode")
-    parser.add_argument("--models-dir", type=str, default="models", help="Global folder for models")
+    parser.add_argument("--models-dir", type=str, default="segmentation/models", help="Global folder for models")
     parser.add_argument("--model-name", type=str, default="best.pth", help="Model filename (relative to models-dir)")
     parser.add_argument("--hsv", action="store_true", help="Use HSV color space")
     parser.add_argument("--h-bilateral", type=int, default=None)

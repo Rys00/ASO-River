@@ -1,5 +1,6 @@
-from lars import load_split, show_img
 import os
+import sys
+from pathlib import Path
 
 # Fix for Qt and Wayland on Linux systems.
 # opencv-python's bundled Qt doesn't support Wayland natively.
@@ -7,6 +8,12 @@ os.environ["QT_QPA_PLATFORM"] = "xcb"
 import cv2
 import numpy as np
 from concurrent.futures import ProcessPoolExecutor, as_completed
+
+# Add project root to sys.path to allow absolute imports from scripts in subfolders
+project_root = str(Path(__file__).resolve().parent.parent)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+from lars import load_split, show_img
 
 
 def segment_water(image, process_dim=256, sp=32, sr=128, k=3):
