@@ -67,9 +67,6 @@ def get_args():
     parser.add_argument("--models-dir", type=str, default="segmentation/models", help="Global folder for models")
     parser.add_argument("--model-name", type=str, default="best.pth", help="Model filename (relative to models-dir)")
     parser.add_argument("--hsv", action="store_true", help="Use HSV color space")
-    parser.add_argument("--h-bilateral", type=int, default=None)
-    parser.add_argument("--s-bilateral", type=int, default=None)
-    parser.add_argument("--v-bilateral", type=int, default=None)
     parser.add_argument("--div", type=int, default=1, help="Image downscale factor")
     parser.add_argument("--features", type=int, nargs="+", default=[16, 16, 32, 32, 64, 128])
     parser.add_argument("--augment", action="store_true", default=True, help="Enable training augmentation")
@@ -82,10 +79,10 @@ def get_args():
 
 
 def show_sample_images(args, shape):
-    x, y, _ = load_split("train", hsv=args.hsv, reshape=shape, h_bilateral=args.h_bilateral, s_bilateral=args.s_bilateral, v_bilateral=args.v_bilateral)
+    x, y, _ = load_split("train", hsv=args.hsv, reshape=shape)
     print(f"Images shape: {x.shape}")
     print(f"Semantic masks shape: {y.shape}")
-    cycle_images(x, y, window_name="Samples", fps=5, highlight_water=None, hsv=args.hsv, hsv_sliders=True, show_hsv_channels=True)
+    cycle_images(x, y, window_name="Samples", fps=5, highlight_water=None, hsv=args.hsv)
 
 
 def train_unet(args, shape, random_chars):
@@ -113,7 +110,7 @@ def train_unet(args, shape, random_chars):
             input_is_hsv=args.hsv,
         ).to(device)
 
-    dataloaders = prepare_dataloaders(batch_size=args.batch_size, reshape=shape, hsv=args.hsv, h_bilateral=args.h_bilateral, s_bilateral=args.s_bilateral, v_bilateral=args.v_bilateral)
+    dataloaders = prepare_dataloaders(batch_size=args.batch_size, reshape=shape, hsv=args.hsv)
 
     lr = args.lr
     preload_path = os.path.join(args.models_dir, args.preload) if args.preload else None

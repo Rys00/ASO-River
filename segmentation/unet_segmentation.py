@@ -143,15 +143,12 @@ def prepare_dataloaders(
     drop_last: bool = True,
     reshape: tuple[int, int] = (1024, 576),
     hsv: bool = False,
-    h_bilateral: int | None = None,
-    s_bilateral: int | None = None,
-    v_bilateral: int | None = None,
 ) -> dict[str, DataLoader]:
     dataloaders: dict[str, DataLoader] = {}
 
     for split in ["train", "val"]:
         print(f"Loading {split} data...")
-        images, masks, _ = load_split(split, reshape=reshape, hsv=hsv, h_bilateral=h_bilateral, s_bilateral=s_bilateral, v_bilateral=v_bilateral)
+        images, masks, _ = load_split(split, reshape=reshape, hsv=hsv)
         images = images.float()
         masks = masks.long()
         print(f"Preparing dataloader for {split} split...")
@@ -162,7 +159,7 @@ def prepare_dataloaders(
             batch_size=batch_size,
             shuffle=shuffle,
             drop_last=drop_last,
-            num_workers=2,
+            num_workers=os.cpu_count() or 0,
             pin_memory=True,
         )
     return dataloaders
