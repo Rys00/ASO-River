@@ -5,6 +5,7 @@ import torch
 import torchmetrics
 import wandb
 import kornia.augmentation as K
+import os
 
 
 class KorniaSegmentationAugment(nn.Module):
@@ -182,6 +183,7 @@ def train(
     gpu_augment: nn.Module | None = None,
     use_amp: bool | None = None,
     random_chars: str = "",
+    save_dir: str = ".",
 ):
     def get_lr() -> float | None:
         if lr_scheduler is not None and hasattr(lr_scheduler, "get_last_lr"):
@@ -299,7 +301,8 @@ def train(
                     best_loss = mean_loss
                 print(f"{color_code}(Epoch {epoch:02}/{epochs} [{phase:5}]) Loss: {mean_loss:.3f} Accuracy: {acc:.3f} lr: {current_lr*10000:.4f}e-4{extra}\033[0m         ")
                 if extra:
-                    torch.save(model.state_dict(), f"{wandb_run_name}.{random_chars}.best.pth")
+                    os.makedirs(save_dir, exist_ok=True)
+                    torch.save(model.state_dict(), os.path.join(save_dir, f"{wandb_run_name}.{random_chars}.best.pth"))
 
             if lr_scheduler is not None:
                 lr_scheduler.step()
