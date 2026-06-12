@@ -2,10 +2,14 @@ from lars import load_split, cycle_images, show_img
 from unet import UNet
 import torch
 from segmentation import KorniaSegmentationAugment, prepare_dataloaders, train
-import cv2
 import os
 import wandb
 from dotenv import load_dotenv
+
+# Fix for Qt and Wayland on Linux systems.
+# opencv-python's bundled Qt doesn't support Wayland natively.
+os.environ["QT_QPA_PLATFORM"] = "xcb"
+import cv2
 
 # mode = "train"
 mode = "show"
@@ -30,6 +34,7 @@ preload_from = "best.pth"
 random_chars = "".join([chr(c) for c in torch.randint(ord("A"), ord("Z") + 1, (5,), dtype=torch.uint8).cpu().numpy().tolist()])
 model_name = f"model{str(features).replace(' ', '')}{'-aug' if augment_train else ''}{'-hsv(' + str(h_bilateral) + ';' + str(s_bilateral) + ';' + str(v_bilateral) + ')' if hsv else ''}{'-wl' if weighted_loss else ''}.pth"
 model_name = "best.pth"  # Override for showing predictions from a specific model.
+
 
 def show_sample_images():
     x, y, _ = load_split("train", hsv=hsv, reshape=shape, h_bilateral=h_bilateral, s_bilateral=s_bilateral, v_bilateral=v_bilateral)
@@ -125,7 +130,9 @@ def show_predictions():
             output = model(xc)
             pred_mask = torch.argmax(output, dim=1).squeeze(0).cpu()
             show_img(x[i], pred_mask, wrong=((pred_mask == 1) != (y[i] == 1)) & (y[i] != 255), hsv=hsv)
-        cv2.waitKey(int(1000 / fps))
+        key = cv2.waitKey(int(1000 / fps))
+        if key == 27:  # ESC key to exit early
+            break
     cv2.destroyAllWindows()
 
 
