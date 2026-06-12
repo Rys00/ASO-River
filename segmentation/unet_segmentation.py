@@ -4,6 +4,7 @@ from torch import nn, optim
 import torch
 import torchmetrics
 import wandb
+import os
 
 
 class KorniaSegmentationAugment(nn.Module):
@@ -146,15 +147,12 @@ def prepare_dataloaders(
     drop_last: bool = True,
     reshape: tuple[int, int] = (1024, 576),
     hsv: bool = False,
-    h_bilateral: int | None = None,
-    s_bilateral: int | None = None,
-    v_bilateral: int | None = None,
 ) -> dict[str, DataLoader]:
     dataloaders: dict[str, DataLoader] = {}
 
     for split in ["train", "val"]:
         print(f"Loading {split} data...")
-        images, masks, _ = load_split(split, reshape=reshape, hsv=hsv, h_bilateral=h_bilateral, s_bilateral=s_bilateral, v_bilateral=v_bilateral)
+        images, masks, _ = load_split(split, reshape=reshape, hsv=hsv)
         images = images.float()
         masks = masks.long()
         print(f"Preparing dataloader for {split} split...")
@@ -165,7 +163,7 @@ def prepare_dataloaders(
             batch_size=batch_size,
             shuffle=shuffle,
             drop_last=drop_last,
-            num_workers=2,
+            num_workers=os.cpu_count() or 0,
             pin_memory=True,
         )
     return dataloaders
@@ -186,6 +184,7 @@ def train(
     gpu_augment: nn.Module | None = None,
     use_amp: bool | None = None,
     random_chars: str = "",
+    save_dir: str = ".",
 ):
     def get_lr() -> float | None:
         if lr_scheduler is not None and hasattr(lr_scheduler, "get_last_lr"):
@@ -303,7 +302,8 @@ def train(
                     best_loss = mean_loss
                 print(f"{color_code}(Epoch {epoch:02}/{epochs} [{phase:5}]) Loss: {mean_loss:.3f} Accuracy: {acc:.3f} lr: {current_lr*10000:.4f}e-4{extra}\033[0m         ")
                 if extra:
-                    torch.save(model.state_dict(), f"{wandb_run_name}.{random_chars}.best.pth")
+                    os.makedirs(save_dir, exist_ok=True)
+                    torch.save(model.state_dict(), os.path.join(save_dir, f"{wandb_run_name}.{random_chars}.best.pth"))
 
             if lr_scheduler is not None:
                 lr_scheduler.step()
