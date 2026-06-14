@@ -61,13 +61,25 @@ def load_split(
     hsv=False,
     num_workers: int = None,
     save_workers: int = None,
-) -> tuple[torch.Tensor, torch.Tensor | None, torch.Tensor | None]:
+    return_filenames: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor | None, torch.Tensor | None] | tuple[
+    torch.Tensor, torch.Tensor | None, torch.Tensor | None, list[str]
+]:
     """
     Load a split of the LARS dataset with caching support.
+
+    Cached tensors are aligned with sorted image file names. Stale caches built
+    before filename tracking (or with a different ordering) are rebuilt automatically.
     """
     reshape = (int(reshape[0]), int(reshape[1]))
     cached_dir = os.path.join(dir, "cached")
     os.makedirs(cached_dir, exist_ok=True)
+    images_dir = data_paths[split]["images"]
+    expected_files = sorted(os.listdir(images_dir))
+    if limit is not None:
+        expected_files = expected_files[:limit]
+
+    filenames_path = os.path.join(cached_dir, f"{split}_filenames.npy")
 
     # Cache paths and status
     cache_info = {
@@ -78,13 +90,27 @@ def load_split(
     for k, v in cache_info.items():
         v["exists"] = os.path.exists(v["path"])
 
+    cache_order_ok = False
+    if cache_info["images"]["exists"] and os.path.exists(filenames_path):
+        cached_files = np.load(filenames_path, allow_pickle=True).tolist()
+        cache_order_ok = cached_files == expected_files
+    if cache_info["images"]["exists"] and not cache_order_ok:
+        print(
+            f"Stale {split} cache (filename order mismatch or missing sidecar); "
+            "reloading from disk..."
+        )
+        for k in cache_info:
+            cache_info[k]["exists"] = False
+
     # Result containers
     results = {k: None for k in cache_info}
+    filenames: list[str] = expected_files
 
     # 1. Load available caches
     if cache_info["images"]["exists"]:
         print(f"Loading cached images from {cache_info['images']['path']}")
         results["images"] = torch.from_numpy(np.load(cache_info["images"]["path"])).float().div_(255.0)
+        filenames = np.load(filenames_path, allow_pickle=True).tolist()
 
     for k in ["semantic", "panoptic"]:
         if cache_info[k]["enabled"] and cache_info[k]["exists"]:
@@ -95,11 +121,12 @@ def load_split(
     missing = [k for k, v in cache_info.items() if (k == "images" or v["enabled"]) and not v["exists"]]
     if not missing:
         print(f"All requested data for {split} split is cached.")
+        if return_filenames:
+            return results["images"], results["semantic"], results["panoptic"], filenames
         return results["images"], results["semantic"], results["panoptic"]
 
     # 2. Load missing data from disk
-    images_dir = data_paths[split]["images"]
-    files = sorted(os.listdir(images_dir))[:limit]
+    files = expected_files
     n_files = len(files)
 
     # Pre-allocate arrays to save memory and time
@@ -132,7 +159,7 @@ def load_split(
         for k in ["semantic", "panoptic"]:
             if k in missing:
                 mask_path = os.path.join(dirs[k], name.replace(".jpg", ".png"))
-                raw = cv2.imread(mask_path, cv2.IMREAD_UNCHANGED)
+                raw = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
                 if raw is None:
                     raise FileNotFoundError(mask_path)
                 disk_data[k][idx] = cv2.resize(raw, reshape, interpolation=cv2.INTER_NEAREST)
@@ -162,6 +189,8 @@ def load_split(
         for k in ["semantic", "panoptic"]:
             if k in missing:
                 save_tasks.append((cache_info[k]["path"], disk_data[k]))
+        if "images" in missing:
+            save_tasks.append((filenames_path, np.array(files, dtype=object)))
 
         if save_tasks:
             print(f"Saving {len(save_tasks)} components to disk...")
@@ -169,6 +198,8 @@ def load_split(
                 list(ex.map(lambda t: np.save(t[0], t[1]), save_tasks))
 
     print(f"Successfully loaded {n_files} samples.")
+    if return_filenames:
+        return results["images"], results["semantic"], results["panoptic"], files
     return results["images"], results["semantic"], results["panoptic"]
 
 
