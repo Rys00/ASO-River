@@ -12,7 +12,7 @@ dependencies = [
     "opencv-contrib-python>=4.13",
     "pycocotools>=2.0.10",
     "scikit-image>=0.26.0",
-    "torch>=2.7.0,<2.8.0",
+    "torch>=2.7.0",
     "torchaudio>=2.7.0",
     "torchmetrics>=1.9.0",
     "torchvision>=0.18.0",
@@ -20,15 +20,15 @@ dependencies = [
 ]
 
 [[tool.uv.index]]
-# Switching to cu118 which has the broadest Pascal (10-series) support
-name = "pytorch-cu118"
-url = "https://download.pytorch.org/whl/cu118"
+# Switching to cu130 to work with my gpu lol
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
 explicit = true
 
 [tool.uv.sources]
 torch = [
-  { index = "pytorch-cu118", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+  { index = "pytorch-cu130", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
 ]
 torchvision = [
-  { index = "pytorch-cu118", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+  { index = "pytorch-cu130", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
 ]

@@ -170,7 +170,7 @@ def compute_split_proposals(
 
 class LarsDetectionDataset(Dataset):
     """LaRS images + Selective Search proposals + box targets from panoptic masks.
-    
+
     Loads images lazily from disk to avoid memory issues with large datasets.
     """
 
@@ -186,13 +186,13 @@ class LarsDetectionDataset(Dataset):
         images_dir = data_paths[split]["images"]
         self.image_files = sorted(os.listdir(images_dir))
         self.num_images = len(self.image_files)
-        
+
         # Build annotation directories
         self.dirs = {
             "images": images_dir,
             "panoptic": os.path.join(data_paths[split]["annotations"], "panoptic_masks"),
         }
-        
+
         # Pre-compute targets from panoptic masks
         self.targets: list[dict[str, torch.Tensor]] = []
         print(f"Computing targets from panoptic masks...")
@@ -206,7 +206,7 @@ class LarsDetectionDataset(Dataset):
             b, l = boxes_from_panoptic(panoptic, min_box_size=min_box_size)
             self.targets.append({"boxes": torch.from_numpy(b), "labels": torch.from_numpy(l)})
         print()
-        
+
         # Pre-compute proposals via selective search (cached)
         self.proposals = self._compute_proposals(max_proposals)
 
@@ -219,14 +219,14 @@ class LarsDetectionDataset(Dataset):
             cached_dir,
             f"{self.split}_proposals_ss_fast_{max_proposals}_{w}x{h}.npz",
         )
-        
+
         if os.path.exists(cached):
             print(f"Loading cached proposals from {cached}")
             data = np.load(cached)
             return [torch.from_numpy(data[f"p{i}"]) for i in range(len(self.image_files))]
 
         print(f"Computing Selective Search proposals for {self.split} split...")
-        
+
         def compute_one(i: int) -> np.ndarray:
             name = self.image_files[i]
             img_path = os.path.join(self.dirs["images"], name)
@@ -242,7 +242,7 @@ class LarsDetectionDataset(Dataset):
                 print(f"Selective Search [{self.split}] {bar(i + 1, len(self.image_files))}", end="\r")
                 proposals.append(boxes)
         print()
-        
+
         np.savez_compressed(cached, **{f"p{i}": b for i, b in enumerate(proposals)})
         print(f"Saved proposals to {cached}")
         return [torch.from_numpy(b) for b in proposals]
@@ -258,14 +258,14 @@ class LarsDetectionDataset(Dataset):
         if img is None:
             raise FileNotFoundError(img_path)
         img = cv2.resize(img, self.reshape)
-        
+
         # Convert to tensor and normalize
         img = img.transpose(2, 0, 1)  # HWC -> CHW
         img = torch.from_numpy(img).float().div_(255.0)
-        
+
         # The pretrained backbone expects RGB; our images are BGR.
         img = img[[2, 1, 0], :, :]
-        
+
         t = self.targets[idx]
         target = {
             "boxes": t["boxes"].clone(),
@@ -585,9 +585,7 @@ def train_detector(
             "amp": amp_enabled,
             "class_weighted_loss": class_weights is not None,
             "model": (
-                f"fast_rcnn_{getattr(model, 'backbone_name', 'resnet')}_fpn_selective_search"
-                if _uses_external_proposals(model)
-                else f"faster_rcnn_{getattr(model, 'backbone_name', 'resnet')}_fpn"
+                f"fast_rcnn_{getattr(model, 'backbone_name', 'resnet')}_fpn_selective_search" if _uses_external_proposals(model) else f"faster_rcnn_{getattr(model, 'backbone_name', 'resnet')}_fpn"
             ),
         },
     )
@@ -718,6 +716,7 @@ def filter_detections_by_water(
     """
     mask = water_mask.detach().cpu().numpy() if isinstance(water_mask, torch.Tensor) else np.asarray(water_mask)
     mask = mask.astype(np.uint8)
+
     if dilate_px > 0:
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * dilate_px + 1, 2 * dilate_px + 1))
         mask = cv2.dilate(mask, kernel)
@@ -729,6 +728,8 @@ def filter_detections_by_water(
         y0 = max(0, min(h - 1, int(box[1])))
         x1 = max(x0 + 1, min(w, int(box[2])))
         y1 = max(y0 + 1, min(h, int(box[3])))
+
+        # Intersects the dilated water mask
         keep[i] = bool(mask[y0:y1, x0:x1].any())
     return boxes[keep], labels[keep], scores[keep]
 
@@ -764,10 +765,7 @@ def xyxy_to_coco_bbox(box: torch.Tensor | np.ndarray | list[float]) -> list[floa
 
 def coco_thing_categories() -> list[dict]:
     """LaRS Thing categories in COCO dataset format."""
-    return [
-        {"id": tid, "name": PANOPTIC[tid]["name"], "supercategory": PANOPTIC[tid]["supercategory"]}
-        for tid in THING_IDS
-    ]
+    return [{"id": tid, "name": PANOPTIC[tid]["name"], "supercategory": PANOPTIC[tid]["supercategory"]} for tid in THING_IDS]
 
 
 def build_coco_detections(
@@ -787,9 +785,7 @@ def build_coco_detections(
     annotations: list[dict] = []
     ann_id = 1
 
-    for image_id, (file_name, boxes, labels, scores) in enumerate(
-        zip(file_names, all_boxes, all_labels, all_scores), start=1
-    ):
+    for image_id, (file_name, boxes, labels, scores) in enumerate(zip(file_names, all_boxes, all_labels, all_scores), start=1):
         images.append({"id": image_id, "file_name": file_name, "width": width, "height": height})
         for box, label, score in zip(boxes, labels, scores):
             bbox = xyxy_to_coco_bbox(box)
@@ -867,11 +863,13 @@ def load_gt_semantic_for_filename(
 
 
 def water_segmentation_iou(pred_water_mask: torch.Tensor, gt_semantic: torch.Tensor, water_class: int = 1) -> float:
-    """IoU for the water class between predicted and ground-truth semantic masks."""
-    pred = pred_water_mask.bool()
-    gt = gt_semantic == water_class
-    intersection = (pred & gt).sum().float()
-    union = (pred | gt).sum().float()
+    """IoU for the water class between predicted and ground-truth semantic masks, excluding ignore index (255)."""
+    # Exclude ignore index 255 identically to unet_main.py
+    valid = gt_semantic != 255
+    pred = pred_water_mask.bool() & valid.to(pred_water_mask.device)
+    gt = (gt_semantic == water_class) & valid
+    intersection = (pred & gt.to(pred.device)).sum().float()
+    union = (pred | gt.to(pred.device)).sum().float()
     if union == 0:
         return 1.0
     return float((intersection / union).item())
@@ -892,11 +890,7 @@ def mean_matched_box_iou(
         return 0.0
 
     ious = box_iou(pred_boxes, gt_boxes)
-    pairs = [
-        (float(ious[pred_idx, gt_idx]), pred_idx, gt_idx)
-        for pred_idx in range(len(pred_boxes))
-        for gt_idx in range(len(gt_boxes))
-    ]
+    pairs = [(float(ious[pred_idx, gt_idx]), pred_idx, gt_idx) for pred_idx in range(len(pred_boxes)) for gt_idx in range(len(gt_boxes))]
     pairs.sort(key=lambda item: item[0], reverse=True)
 
     used_preds: set[int] = set()
@@ -966,9 +960,7 @@ def compute_per_image_detection_stats(
     iou_threshold: float = 0.5,
 ) -> dict[str, float | int | None]:
     """Per-image detection stats meaningful on a single image (not mAP)."""
-    tp, fp, fn = match_detections_coco(
-        pred_boxes, pred_labels, pred_scores, gt_boxes, gt_labels, iou_threshold=iou_threshold
-    )
+    tp, fp, fn = match_detections_coco(pred_boxes, pred_labels, pred_scores, gt_boxes, gt_labels, iou_threshold=iou_threshold)
     precision, recall, f1 = _prf1(tp, fp, fn)
     return {
         "tp": tp,
@@ -1128,14 +1120,8 @@ def format_dataset_metrics_summary(metrics: dict[str, float | torch.Tensor | int
 
     lines: list[str] = []
     if n:
-        lines.append(
-            f"Dataset detection metrics ({n} image(s) with GT boxes, raw detector before water filter):"
-        )
-        lines.append(
-            f"  mAP={_format_metric_value(metrics.get('map'))} "
-            f"mAP@50={_format_metric_value(metrics.get('map_50'))} "
-            f"mAP@75={_format_metric_value(metrics.get('map_75'))}"
-        )
+        lines.append(f"Dataset detection metrics ({n} image(s) with GT boxes, raw detector before water filter):")
+        lines.append(f"  mAP={_format_metric_value(metrics.get('map'))} " f"mAP@50={_format_metric_value(metrics.get('map_50'))} " f"mAP@75={_format_metric_value(metrics.get('map_75'))}")
         if metrics.get("f1") is not None:
             lines.append(
                 f"  Global @ IoU 0.5: TP={metrics['tp']} FP={metrics['fp']} FN={metrics['fn']} "
@@ -1145,11 +1131,7 @@ def format_dataset_metrics_summary(metrics: dict[str, float | torch.Tensor | int
         map_per_class = metrics.get("map_per_class")
         if isinstance(map_per_class, torch.Tensor) and map_per_class.dim() > 0:
             per_class = map_per_class.flatten().tolist()
-            missing_classes = [
-                LABEL_NAMES[label_idx]
-                for label_idx, ap in enumerate(per_class)
-                if label_idx in LABEL_NAMES and ap < 0
-            ]
+            missing_classes = [LABEL_NAMES[label_idx] for label_idx, ap in enumerate(per_class) if label_idx in LABEL_NAMES and ap < 0]
             if missing_classes:
                 lines.append(f"  Classes with no GT in evaluated set: {', '.join(missing_classes)} (AP=undef)")
 
